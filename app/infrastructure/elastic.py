@@ -1,10 +1,12 @@
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 
 from elasticsearch import ApiError, AsyncElasticsearch, NotFoundError, TransportError
 
 from app.domain.errors import StorageUnavailable
 
+# По условию индекс хранит только id и text, даты в нём нет, поэтому сортировка
+# по дате выполняется в БД. Анализатор russian даёт стемминг и убирает стоп-слова.
 INDEX_MAPPING = {
     "properties": {
         "id": {"type": "long"},
@@ -14,7 +16,7 @@ INDEX_MAPPING = {
 
 
 @contextmanager
-def _translate_errors() -> Iterator[None]:
+def _translate_errors() -> Generator[None]:
     try:
         yield
     except (ApiError, TransportError) as exc:
@@ -37,13 +39,18 @@ class EsSearchIndex:
         self._max_ids = max_ids
 
     async def search_ids(self, query: str) -> list[int]:
+        # operator=and: нужны все слова запроса. С or при сортировке по дате выдача
+        # свелась бы к «последним постам, где есть хоть одно слово».
+        # Если запрос состоит из одних стоп-слов, после анализа не остаётся термов,
+        # и match ничего не находит (zero_terms_query=none по умолчанию).
+        # Возвращаются id всех совпадений, лимит применяется в БД.
         with _translate_errors():
             response = await self._es.search(
                 index=self._index,
                 query={"match": {"text": {"query": query, "operator": "and"}}},
                 size=self._max_ids,
-                source=False,
-                track_total_hits=False,
+                source=False,  # нужны только _id
+                track_total_hits=False,  # общее число совпадений не используется
             )
         return [int(hit["_id"]) for hit in response["hits"]["hits"]]
 

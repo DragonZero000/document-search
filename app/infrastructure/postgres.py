@@ -1,5 +1,4 @@
-import asyncio
-from collections.abc import AsyncIterator, Iterator, Sequence
+from collections.abc import AsyncGenerator, Generator, Sequence
 from contextlib import asynccontextmanager, contextmanager
 
 import asyncpg
@@ -7,16 +6,18 @@ import asyncpg
 from app.domain.errors import StorageUnavailable
 from app.domain.models import Document
 
+# Всё, что означает «PostgreSQL недоступен или не справился», превращается в 503.
 _STORAGE_ERRORS = (
-    asyncpg.PostgresError,
-    asyncpg.InterfaceError,
-    OSError,
-    asyncio.TimeoutError,
+    asyncpg.PostgresError,  # ошибка, которую вернул сервер
+    asyncpg.InterfaceError,  # соединение или пул закрыты, протокол нарушен
+    OSError,  # соединение не установлено или оборвалось
+    # Истёк command_timeout. Это подкласс OSError, но указан явно, чтобы случай был виден.
+    TimeoutError,
 )
 
 
 @contextmanager
-def _translate_errors() -> Iterator[None]:
+def _translate_errors() -> Generator[None]:
     try:
         yield
     except _STORAGE_ERRORS as exc:
@@ -47,7 +48,7 @@ class PgDocumentRepository:
         return [Document(**dict(row)) for row in rows]
 
     @asynccontextmanager
-    async def delete(self, document_id: int) -> AsyncIterator[bool]:
+    async def delete(self, document_id: int) -> AsyncGenerator[bool]:
         # Строка остаётся заблокированной до конца транзакции: параллельный DELETE
         # того же id дождётся фиксации и получит 404.
         with _translate_errors():

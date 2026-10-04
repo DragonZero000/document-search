@@ -1,7 +1,7 @@
 """In-memory реализации портов для функциональных тестов."""
 
 import re
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
 
 from app.domain.errors import StorageUnavailable
@@ -23,7 +23,7 @@ class InMemoryDocumentRepository:
         return found[:limit]
 
     @asynccontextmanager
-    async def delete(self, document_id: int) -> AsyncIterator[bool]:
+    async def delete(self, document_id: int) -> AsyncGenerator[bool]:
         document = self.documents.pop(document_id, None)
         try:
             yield document is not None
@@ -42,7 +42,7 @@ class FailingDocumentRepository:
         raise StorageUnavailable("PostgreSQL is down")
 
     @asynccontextmanager
-    async def delete(self, document_id: int) -> AsyncIterator[bool]:
+    async def delete(self, document_id: int) -> AsyncGenerator[bool]:
         raise StorageUnavailable("PostgreSQL is down")
         yield False  # pragma: no cover — делает функцию генератором
 

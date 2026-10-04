@@ -1,0 +1,12 @@
+# Публикует PostgreSQL и Elasticsearch на хост для запуска API без Docker:
+#   docker compose -f docker-compose.yml -f compose.local.yml up -d postgres elasticsearch
+# Не называется compose.override.yml намеренно: тот подхватывается автоматически
+# и открывал бы порты при обычном `docker compose up`.
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+
+  elasticsearch:
+    ports:
+      - "9200:9200"

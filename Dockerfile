@@ -9,10 +9,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Зависимости ставятся отдельным слоем, чтобы изменения кода не инвалидировали кэш.
-COPY pyproject.toml ./
-RUN python -c "import tomllib; p = tomllib.load(open('pyproject.toml', 'rb'))['project']; \
-print('\n'.join(p['dependencies']))" > /tmp/requirements.txt \
-    && pip install -r /tmp/requirements.txt \
+# Точные версии — из lock-файла (перегенерация описана в README).
+COPY requirements.lock ./
+RUN pip install -r requirements.lock \
     && useradd --create-home --uid 1000 app
 
 COPY app ./app
@@ -32,9 +31,9 @@ FROM runtime AS test
 
 USER root
 
-RUN python -c "import tomllib; p = tomllib.load(open('pyproject.toml', 'rb'))['project']; \
-print('\n'.join(p['optional-dependencies']['dev']))" > /tmp/requirements-dev.txt \
-    && pip install -r /tmp/requirements-dev.txt
+# pyproject.toml нужен только pytest (маркеры, asyncio_mode).
+COPY pyproject.toml requirements-dev.lock ./
+RUN pip install -r requirements-dev.lock
 
 COPY tests ./tests
 COPY docs.json ./

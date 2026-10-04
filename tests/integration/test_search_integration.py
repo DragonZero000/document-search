@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 
+import asyncpg
 import pytest
 from httpx import AsyncClient
 
@@ -41,3 +42,36 @@ async def test_returns_20_newest_of_all_matches(client: AsyncClient, insert_docu
         "text": "конкурс номер 24",
         "created_date": (BASE + timedelta(days=24)).isoformat(),
     }
+
+
+async def test_equal_dates_ordered_by_id_desc(client: AsyncClient, insert_document: InsertDocument):
+    first = await insert_document("конкурс", BASE)
+    second = await insert_document("конкурс", BASE)
+
+    response = await client.get("/documents/search", params={"q": "конкурс"})
+
+    assert [d["id"] for d in response.json()] == [second, first]
+
+
+async def test_ghost_in_index_is_not_returned(
+    client: AsyncClient, insert_document: InsertDocument, pool: asyncpg.Pool
+):
+    alive = await insert_document("конкурс", BASE)
+    ghost = await insert_document("конкурс", BASE + timedelta(days=1))
+    # Удалён из БД, но остался в индексе.
+    await pool.execute("DELETE FROM documents WHERE id = $1", ghost)
+
+    response = await client.get("/documents/search", params={"q": "конкурс"})
+
+    assert [d["id"] for d in response.json()] == [alive]
+
+
+async def test_stop_words_only_query_returns_empty(
+    client: AsyncClient, insert_document: InsertDocument
+):
+    await insert_document("Конкурс на новый скин", BASE)
+
+    response = await client.get("/documents/search", params={"q": "и на"})
+
+    assert response.status_code == 200
+    assert response.json() == []

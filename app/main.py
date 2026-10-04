@@ -1,5 +1,5 @@
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, status
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     settings: Settings = app.state.settings
     app.state.pg_pool = await postgres.create_pool(settings.database_url)
     app.state.es = elastic.create_client(settings.es_url, timeout=settings.es_timeout)
@@ -30,6 +30,8 @@ async def _document_not_found(request: Request, exc: Exception) -> JSONResponse:
 
 
 async def _storage_unavailable(request: Request, exc: Exception) -> JSONResponse:
+    # В лог — трейсбек исходной ошибки драйвера (__cause__), а не обёртки StorageUnavailable;
+    # клиенту детали не раскрываются.
     logger.error("Storage unavailable: %s", exc, exc_info=exc.__cause__)
     return JSONResponse(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content={"detail": "Service unavailable"}

@@ -4,7 +4,7 @@
 Тесты работают с отдельной БД и индексом (по умолчанию documents_test) и очищают их перед каждым тестом.
 """
 
-from collections.abc import AsyncIterator, Callable, Awaitable
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from datetime import datetime
 from urllib.parse import urlsplit, urlunsplit
 
@@ -48,7 +48,7 @@ async def _ensure_database(dsn: str) -> None:
 
 
 @pytest.fixture
-async def pool(settings: Settings) -> AsyncIterator[asyncpg.Pool]:
+async def pool(settings: Settings) -> AsyncGenerator[asyncpg.Pool]:
     await _ensure_database(settings.database_url)
     pool = await postgres.create_pool(settings.database_url, max_size=5)
     async with pool.acquire() as conn:
@@ -59,7 +59,7 @@ async def pool(settings: Settings) -> AsyncIterator[asyncpg.Pool]:
 
 
 @pytest.fixture
-async def es(settings: Settings) -> AsyncIterator[AsyncElasticsearch]:
+async def es(settings: Settings) -> AsyncGenerator[AsyncElasticsearch]:
     client = elastic.create_client(settings.es_url, timeout=30)
     await elastic.recreate_index(client, settings.es_index)
     yield client
@@ -97,6 +97,6 @@ def app(settings: Settings, pool: asyncpg.Pool, es: AsyncElasticsearch) -> FastA
 
 
 @pytest.fixture
-async def client(app: FastAPI) -> AsyncIterator[AsyncClient]:
+async def client(app: FastAPI) -> AsyncGenerator[AsyncClient]:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac

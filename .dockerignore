@@ -1,12 +1,15 @@
-.git
-.venv
-venv
-.env
-.claude
-openspec
+# Белый список: в контекст сборки попадает только то, что копирует Dockerfile.
+*
+!pyproject.toml
+!requirements.lock
+!requirements-dev.lock
+!app
+!scripts
+!migrations
+!test-data
+!tests
+!docs.json
+
+# Исключения внутри разрешённых каталогов — после «!»-правил (побеждает последнее совпавшее).
 **/__pycache__
 **/*.pyc
-.pytest_cache
-*.egg-info
-build
-dist

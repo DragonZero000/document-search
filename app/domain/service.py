@@ -10,6 +10,9 @@ class DocumentService:
         self._limit = limit
 
     async def search(self, query: str) -> list[Document]:
+        # Из индекса — id всех совпадений, а сортировка по дате и лимит — в БД:
+        # даты в индексе нет, а отбор не должен зависеть от релевантности.
+        # БД заодно отсекает документы, которые удалены, но ещё есть в индексе.
         ids = await self._index.search_ids(query)
         if not ids:
             return []

@@ -74,6 +74,8 @@ async def index_documents(conn: asyncpg.Connection, es: AsyncElasticsearch, inde
 
 
 async def index_in_sync(conn: asyncpg.Connection, es: AsyncElasticsearch, index: str) -> bool:
+    # Дешёвая проверка: сравниваются только количества. Если число совпадает, а наборы id
+    # разные, расхождение не обнаружится; в этом случае поможет `seed --force`.
     if not await es.indices.exists(index=index):
         return False
     await es.indices.refresh(index=index)
