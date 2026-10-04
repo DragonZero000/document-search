@@ -1,0 +1,9 @@
+.pytest_cache
+__pycache__
+.venv
+.env
+venv
+.claude
+openspec
+*.pyc
+*.egg-info

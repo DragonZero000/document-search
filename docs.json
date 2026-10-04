@@ -1,0 +1,285 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Document Search",
+    "description": "Полнотекстовый поиск по документам (PostgreSQL + Elasticsearch).",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/documents/search": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Полнотекстовый поиск документов",
+        "description": "Ищет запрос по тексту документов и возвращает не более `SEARCH_LIMIT` (по умолчанию 20) совпавших документов, упорядоченных по дате создания по убыванию (сначала новые). Сортировка и лимит применяются ко всем совпадениям, а не к наиболее релевантным.",
+        "operationId": "search_documents_documents_search_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500,
+              "description": "Текст запроса: 1–500 символов после обрезки пробелов. Документ совпадает, если содержит все значимые слова запроса (с учётом морфологии).",
+              "examples": [
+                "конкурс"
+              ],
+              "title": "Q"
+            },
+            "description": "Текст запроса: 1–500 символов после обрезки пробелов. Документ совпадает, если содержит все значимые слова запроса (с учётом морфологии)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Document"
+                  },
+                  "title": "Response Search Documents Documents Search Get"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "PostgreSQL или Elasticsearch недоступны",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{id}": {
+      "delete": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Удаление документа",
+        "description": "Удаляет документ из БД и из поискового индекса в рамках одного запроса. Если PostgreSQL или Elasticsearch недоступны, сервис отвечает 503, и документ не удаляется ни из одного хранилища — запрос можно повторить.",
+        "operationId": "delete_document_documents__id__delete",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 2147483647,
+              "minimum": 1,
+              "description": "Идентификатор документа (1–2147483647)",
+              "title": "Id"
+            },
+            "description": "Идентификатор документа (1–2147483647)"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Документ удалён"
+          },
+          "404": {
+            "description": "Документ не найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "PostgreSQL или Elasticsearch недоступны",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "service"
+        ],
+        "summary": "Проверка готовности",
+        "description": "Проверяет доступность PostgreSQL и наличие поискового индекса в Elasticsearch.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "PostgreSQL или Elasticsearch недоступны",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Document": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "Идентификатор документа в БД"
+          },
+          "rubrics": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Rubrics",
+            "description": "Рубрики документа"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "description": "Текст документа"
+          },
+          "created_date": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created Date",
+            "description": "Дата создания документа (ISO 8601)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "rubrics",
+          "text",
+          "created_date"
+        ],
+        "title": "Document"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

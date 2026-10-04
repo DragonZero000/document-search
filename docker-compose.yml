@@ -1,0 +1,89 @@
+x-app: &app
+  build:
+    context: .
+    target: runtime
+  image: document-search:latest
+  environment:
+    DATABASE_URL: postgresql://postgres:postgres@postgres:5432/documents
+    ES_URL: http://elasticsearch:9200
+    ES_INDEX: documents
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: documents
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d documents"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 20s
+
+  seed:
+    <<: *app
+    command: ["python", "-m", "scripts.seed"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+
+  # Интеграционные тесты на реальных PostgreSQL и Elasticsearch
+  # (отдельная БД documents_test и индекс documents_test):
+  #   docker compose run --rm tests
+  tests:
+    <<: *app
+    build:
+      context: .
+      target: test
+    image: document-search:test
+    profiles: ["tests"]
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/documents_test
+      ES_URL: http://elasticsearch:9200
+      ES_INDEX: documents_test
+    command: ["python", "-m", "pytest", "-m", "integration", "-v"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  esdata:

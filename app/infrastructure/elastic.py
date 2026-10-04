@@ -1,0 +1,62 @@
+from collections.abc import Iterator
+from contextlib import contextmanager
+
+from elasticsearch import ApiError, AsyncElasticsearch, NotFoundError, TransportError
+
+from app.domain.errors import StorageUnavailable
+
+INDEX_MAPPING = {
+    "properties": {
+        "id": {"type": "long"},
+        "text": {"type": "text", "analyzer": "russian"},
+    }
+}
+
+
+@contextmanager
+def _translate_errors() -> Iterator[None]:
+    try:
+        yield
+    except (ApiError, TransportError) as exc:
+        raise StorageUnavailable(f"Elasticsearch error: {type(exc).__name__}") from exc
+
+
+def create_client(url: str, *, timeout: float = 5.0) -> AsyncElasticsearch:
+    return AsyncElasticsearch(url, request_timeout=timeout)
+
+
+async def recreate_index(es: AsyncElasticsearch, index: str) -> None:
+    await es.indices.delete(index=index, ignore_unavailable=True)
+    await es.indices.create(index=index, mappings=INDEX_MAPPING)
+
+
+class EsSearchIndex:
+    def __init__(self, es: AsyncElasticsearch, index: str, max_ids: int) -> None:
+        self._es = es
+        self._index = index
+        self._max_ids = max_ids
+
+    async def search_ids(self, query: str) -> list[int]:
+        with _translate_errors():
+            response = await self._es.search(
+                index=self._index,
+                query={"match": {"text": {"query": query, "operator": "and"}}},
+                size=self._max_ids,
+                source=False,
+                track_total_hits=False,
+            )
+        return [int(hit["_id"]) for hit in response["hits"]["hits"]]
+
+    async def delete(self, document_id: int) -> None:
+        try:
+            await self._es.delete(index=self._index, id=str(document_id))
+        except NotFoundError:
+            return
+        except (ApiError, TransportError) as exc:
+            raise StorageUnavailable(f"Elasticsearch error: {type(exc).__name__}") from exc
+
+    async def ping(self) -> None:
+        with _translate_errors():
+            exists = await self._es.indices.exists(index=self._index)
+        if not exists:
+            raise StorageUnavailable(f"Elasticsearch index {self._index!r} does not exist")
